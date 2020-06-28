@@ -35,8 +35,8 @@ namespace wsrep
 {
 
     /* Type tags for TLS context and TLS stream. */
-    struct tls_context;
-    struct tls_stream;
+    struct tls_context { };
+    struct tls_stream { };
 
     /** @class tls_service
      *

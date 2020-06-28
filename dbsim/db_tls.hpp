@@ -1,0 +1,48 @@
+/*
+ * Copyright (C) 2020 Codership Oy <info@codership.com>
+ *
+ * This file is part of wsrep-lib.
+ *
+ * Wsrep-lib is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation, either version 2 of the License, or
+ * (at your option) any later version.
+ *
+ * Wsrep-lib is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with wsrep-lib.  If not, see <https://www.gnu.org/licenses/>.
+ */
+
+#ifndef WSREP_DB_TLS_HPP
+#define WSREP_DB_TLS_HPP
+
+#include "wsrep/tls_service.hpp"
+
+namespace db
+{
+    class tls : public wsrep::tls_service
+    {
+    public:
+        virtual wsrep::tls_context* create_tls_context() WSREP_NOEXCEPT override;
+        virtual void destroy(wsrep::tls_context*) WSREP_NOEXCEPT override;
+        virtual wsrep::tls_stream* create_tls_stream(wsrep::tls_context*, int)
+            WSREP_NOEXCEPT override;
+        virtual ssize_t client_handshake(wsrep::tls_stream*)
+            WSREP_NOEXCEPT override;
+        virtual ssize_t server_handshake(wsrep::tls_stream*)
+            WSREP_NOEXCEPT override;
+        virtual wsrep::tls_service::op_result
+        read(wsrep::tls_stream*, void* buf, size_t max_count)
+            WSREP_NOEXCEPT override;
+        virtual wsrep::tls_service::op_result
+        write(wsrep::tls_stream*, const void* buf, size_t count)
+            WSREP_NOEXCEPT override;
+        virtual void shutdown(wsrep::tls_stream*) WSREP_NOEXCEPT override;
+    };
+};
+
+#endif // WSREP_DB_TLS_HPP
