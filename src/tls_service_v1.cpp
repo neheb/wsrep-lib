@@ -148,6 +148,30 @@ namespace wsrep_tls_service_v1
 
 }
 
+int wsrep::tls_service_v1_probe(void* dlh)
+{
+   typedef int (*init_fn)(wsrep_tls_service_v1_t*);
+    union {
+        init_fn dlfun;
+        void* obj;
+    } alias;
+    // Clear previous errors
+    (void)dlerror();
+    alias.obj = dlsym(dlh, WSREP_TLS_SERVICE_INIT_FUNC_V1);
+    if (alias.obj)
+    {
+        wsrep::log_info()
+            << "Found support for TLS service v1 from provider";
+        return 0;
+    }
+    else
+    {
+        wsrep::log_info() << "TLS service v1 not found from provider: "
+                          << dlerror();
+        return ENOTSUP;
+    }
+}
+
 int wsrep::tls_service_v1_init(void* dlh,
                                wsrep::tls_service* tls_service)
 {
