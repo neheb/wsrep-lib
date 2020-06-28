@@ -26,8 +26,10 @@
 #include "wsrep/exception.hpp"
 #include "wsrep/logger.hpp"
 #include "wsrep/thread_service.hpp"
+#include "wsrep/tls_service.hpp"
 
 #include "thread_service_v1.hpp"
+#include "tls_service_v1.hpp"
 #include "v26/wsrep_api.h"
 
 
@@ -601,6 +603,17 @@ namespace
         }
         return 0;
     }
+
+    static int init_tls_service(void* dlh,
+                                wsrep::tls_service* tls_service)
+    {
+        assert(tls_service);
+        if (not wsrep::tls_service_v1_probe(dlh))
+        {
+            return wsrep::tls_service_v1_init(dlh, tls_service);
+        }
+        return 0;
+    }
 }
 
 wsrep::wsrep_provider_v26::wsrep_provider_v26(
@@ -648,6 +661,11 @@ wsrep::wsrep_provider_v26::wsrep_provider_v26(
         init_thread_service(wsrep_->dlh, services.thread_service))
     {
         throw wsrep::runtime_error("Failed to initialize thread service");
+    }
+    if (services.tls_service &&
+        init_tls_service(wsrep_->dlh, services.tls_service))
+    {
+        throw wsrep::runtime_error("Failed to initialze TLS service");
     }
 
     if (wsrep_->init(wsrep_, &init_args) != WSREP_OK)
