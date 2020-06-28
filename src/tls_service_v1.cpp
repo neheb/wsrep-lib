@@ -59,6 +59,77 @@ namespace wsrep_tls_service_v1
         return 0;
     }
 
+    static void tls_stream_shutdown_cb(wsrep_tls_stream_t* stream)
+    {
+        assert(tls_service_impl);
+        tls_service_impl->shutdown(reinterpret_cast<wsrep::tls_stream*>(stream));
+    }
+
+    static enum wsrep_tls_result map_return_value(ssize_t status)
+    {
+        switch (status)
+        {
+        case wsrep::tls_service::success:
+            return wsrep_tls_result_success;
+        case wsrep::tls_service::want_read:
+            return wsrep_tls_result_want_read;
+        case wsrep::tls_service::want_write:
+            return wsrep_tls_result_want_write;
+        case wsrep::tls_service::eof:
+            return wsrep_tls_result_eof;
+        default:
+            assert(status < 0);
+            return wsrep_tls_result_error;
+        }
+    }
+
+
+    static enum wsrep_tls_result
+    tls_stream_client_handshake_cb(wsrep_tls_stream_t* stream)
+    {
+        assert(tls_service_impl);
+        return map_return_value(
+            tls_service_impl->client_handshake(
+                reinterpret_cast<wsrep::tls_stream*>(stream)));
+    }
+
+    static enum wsrep_tls_result
+    tls_stream_server_handshake_cb(wsrep_tls_stream_t* stream)
+    {
+        assert(tls_service_impl);
+        return map_return_value(
+            tls_service_impl->server_handshake(
+                reinterpret_cast<wsrep::tls_stream*>(stream)));
+    }
+
+    static enum wsrep_tls_result tls_stream_read_cb(
+        wsrep_tls_stream_t* stream,
+        void* buf,
+        size_t max_count,
+        size_t* bytes_transferred)
+    {
+        assert(tls_service_impl);
+        auto result(tls_service_impl->read(
+                        reinterpret_cast<wsrep::tls_stream*>(stream),
+                        buf, max_count));
+        *bytes_transferred = result.bytes_transferred;
+        return map_return_value(result.status);
+    }
+
+    static enum wsrep_tls_result tls_stream_write_cb(
+        wsrep_tls_stream_t* stream,
+        const void* buf,
+        size_t count,
+        size_t* bytes_transferred)
+    {
+        assert(tls_service_impl);
+        auto result(tls_service_impl->write(
+                        reinterpret_cast<wsrep::tls_stream*>(stream),
+                        buf, count));
+        *bytes_transferred = result.bytes_transferred;
+        return map_return_value(result.status);
+    }
+
     static wsrep_tls_service_v1_t tls_service_callbacks =
     {
         tls_context_create_cb,
@@ -66,6 +137,12 @@ namespace wsrep_tls_service_v1
         0,
         0,
         tls_stream_init_cb,
+        tls_stream_shutdown_cb,
+        0,
+        tls_stream_client_handshake_cb,
+        tls_stream_server_handshake_cb,
+        tls_stream_read_cb,
+        tls_stream_write_cb
     };
 
 

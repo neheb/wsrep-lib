@@ -51,7 +51,6 @@ namespace wsrep
             success = 0,
             want_read,
             want_write,
-            would_block,
             eof
         };
 
@@ -85,12 +84,14 @@ namespace wsrep
         /**
          * Read at most max_count bytes into buf.
          */
-        virtual op_result read(void* buf, size_t max_count) WSREP_NOEXCEPT = 0;
+        virtual op_result read(tls_stream*,
+                               void* buf, size_t max_count) WSREP_NOEXCEPT = 0;
 
         /**
          * Write at most count bytes from buf.
          */
-        virtual op_result write(const void* buf, size_t count) WSREP_NOEXCEPT = 0;
+        virtual op_result write(tls_stream*,
+                                const void* buf, size_t count) WSREP_NOEXCEPT = 0;
 
         /**
          * Shutdown TLS stream.
