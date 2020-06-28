@@ -56,7 +56,7 @@ namespace
 
 wsrep::tls_context* db::tls::create_tls_context() WSREP_NOEXCEPT
 {
-    return 0;
+    return reinterpret_cast<wsrep::tls_context*>(1);
 }
 
 void db::tls::destroy(wsrep::tls_context*) WSREP_NOEXCEPT
@@ -65,7 +65,9 @@ void db::tls::destroy(wsrep::tls_context*) WSREP_NOEXCEPT
 wsrep::tls_stream* db::tls::create_tls_stream(
     wsrep::tls_context*, int fd) WSREP_NOEXCEPT
 {
-    return new db_stream(fd);
+    auto ret(new db_stream(fd));
+    wsrep::log_info() << "New DB stream: " << ret;
+    return ret;
 }
 
 ssize_t db::tls::client_handshake(wsrep::tls_stream*) WSREP_NOEXCEPT
@@ -143,5 +145,6 @@ void db::tls::shutdown(wsrep::tls_stream* stream) WSREP_NOEXCEPT
     auto dbs(static_cast<db_stream*>(stream));
     wsrep::log_info() << "Stream shutdown: " << dbs->get_stats().bytes_read
                       << " " << dbs->get_stats().bytes_written;
+    wsrep::log_info() << "Stream pointer" << dbs;
     delete dbs;
 }

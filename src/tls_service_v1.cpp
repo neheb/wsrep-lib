@@ -62,7 +62,8 @@ namespace wsrep_tls_service_v1
     static void tls_stream_shutdown_cb(wsrep_tls_stream_t* stream)
     {
         assert(tls_service_impl);
-        tls_service_impl->shutdown(reinterpret_cast<wsrep::tls_stream*>(stream));
+        tls_service_impl->shutdown(reinterpret_cast<wsrep::tls_stream*>(stream->opaque));
+        stream->opaque = 0;
     }
 
     static enum wsrep_tls_result map_return_value(ssize_t status)
@@ -90,7 +91,7 @@ namespace wsrep_tls_service_v1
         assert(tls_service_impl);
         return map_return_value(
             tls_service_impl->client_handshake(
-                reinterpret_cast<wsrep::tls_stream*>(stream)));
+                reinterpret_cast<wsrep::tls_stream*>(stream->opaque)));
     }
 
     static enum wsrep_tls_result
@@ -99,7 +100,7 @@ namespace wsrep_tls_service_v1
         assert(tls_service_impl);
         return map_return_value(
             tls_service_impl->server_handshake(
-                reinterpret_cast<wsrep::tls_stream*>(stream)));
+                reinterpret_cast<wsrep::tls_stream*>(stream->opaque)));
     }
 
     static enum wsrep_tls_result tls_stream_read_cb(
@@ -110,7 +111,7 @@ namespace wsrep_tls_service_v1
     {
         assert(tls_service_impl);
         auto result(tls_service_impl->read(
-                        reinterpret_cast<wsrep::tls_stream*>(stream),
+                        reinterpret_cast<wsrep::tls_stream*>(stream->opaque),
                         buf, max_count));
         *bytes_transferred = result.bytes_transferred;
         return map_return_value(result.status);
@@ -124,7 +125,7 @@ namespace wsrep_tls_service_v1
     {
         assert(tls_service_impl);
         auto result(tls_service_impl->write(
-                        reinterpret_cast<wsrep::tls_stream*>(stream),
+                        reinterpret_cast<wsrep::tls_stream*>(stream->opaque),
                         buf, count));
         *bytes_transferred = result.bytes_transferred;
         return map_return_value(result.status);

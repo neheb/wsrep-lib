@@ -87,6 +87,9 @@ db::params db::parse_args(int argc, char** argv)
          po::value<bool>(&params.cond_checks),
          "Enable checks for correct condition variable use. "
          " Effective only if thread-instrumentation is enabled")
+        ("tls-service",
+         po::value<int>(&params.tls_service),
+         "Enable TLS service stubs. (0 default disabled, > 0 enabled)")
         ;
     try
     {
