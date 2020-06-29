@@ -53,6 +53,7 @@ namespace db
             WSREP_NOEXCEPT override;
         virtual void shutdown(wsrep::tls_stream*) WSREP_NOEXCEPT override;
 
+        static void init(int mode);
         static std::string stats();
     };
 };

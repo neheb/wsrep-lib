@@ -41,10 +41,12 @@ namespace
     class db_stream : public wsrep::tls_stream
     {
     public:
-        db_stream(int fd)
+        db_stream(int fd, int mode)
             : fd_(fd)
             , state_(s_initialized)
             , last_error_()
+            , mode_(mode)
+            , stats_()
         { }
         struct stats
         {
@@ -90,11 +92,26 @@ namespace
         const stats& get_stats() const { return stats_; }
     private:
         enum wsrep::tls_service::status handle_handshake_read(const char* expect);
+        size_t determine_read_count(size_t max_count)
+        {
+            if (mode_ < 2) return max_count;
+            else if (::rand() % 100 == 0) return std::min(size_t(42), max_count);
+            else return max_count;
+        }
+        size_t determine_write_count(size_t count)
+        {
+            if (mode_ < 2) return count;
+            else if (::rand() % 100 == 0) return std::min(size_t(43), count);
+            else return count;
+        }
         void clear_error() { last_error_ = 0; }
-
         int fd_;
         enum state state_;
         int last_error_;
+        // Operation mode:
+        // 1 - simulate handshake exchange
+        // 2 - simulate errors and short reads
+        int mode_;
         stats stats_;
     };
 
@@ -176,6 +193,7 @@ namespace
     wsrep::tls_service::op_result db_stream::read(void* buf, size_t max_count)
     {
         clear_error();
+        max_count = determine_read_count(max_count);
         ssize_t read_result(::read(fd_, buf, max_count));
         if (read_result > 0)
         {
@@ -205,6 +223,7 @@ namespace
         const void* buf, size_t count)
     {
         clear_error();
+        count = determine_write_count(count);
         ssize_t write_result(::send(fd_, buf, count, MSG_NOSIGNAL));
         if (write_result > 0)
         {
@@ -234,6 +253,7 @@ namespace
 
 static db_stream::stats global_stats;
 std::mutex global_stats_lock;
+static int global_mode;
 
 static void merge_to_global_stats(const db_stream::stats& stats)
 {
@@ -255,7 +275,7 @@ void db::tls::destroy(wsrep::tls_context*) WSREP_NOEXCEPT
 wsrep::tls_stream* db::tls::create_tls_stream(
     wsrep::tls_context*, int fd) WSREP_NOEXCEPT
 {
-    auto ret(new db_stream(fd));
+    auto ret(new db_stream(fd, global_mode));
     wsrep::log_debug() << "New DB stream: " << ret;
     return ret;
 }
@@ -312,6 +332,11 @@ void db::tls::shutdown(wsrep::tls_stream* stream) WSREP_NOEXCEPT
                       << " " << dbs->get_stats().bytes_written;
     wsrep::log_debug() << "Stream pointer" << dbs;
     delete dbs;
+}
+
+void db::tls::init(int mode)
+{
+    global_mode = mode;
 }
 
 std::string db::tls::stats()

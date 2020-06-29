@@ -117,6 +117,7 @@ void db::simulator::start()
 {
     thread_instrumentation.level(params_.thread_instrumentation);
     thread_instrumentation.cond_checks(params_.cond_checks);
+    tls_service.init(params_.tls_service);
     wsrep::log_info() << "Provider: " << params_.wsrep_provider;
 
     std::string cluster_address(build_cluster_address());
