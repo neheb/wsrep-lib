@@ -67,86 +67,9 @@ namespace
             s_want_write
         };
 
-        enum wsrep::tls_service::status client_handshake()
-        {
-            enum wsrep::tls_service::status ret;
-            assert(state_ == s_initialized || state_ == s_client_handshake);
-            if (state_ == s_initialized)
-            {
-                (void)::send(fd_, "clie", 4, MSG_NOSIGNAL);
-                ret = wsrep::tls_service::want_read;
-                state_ = s_client_handshake;
-                wsrep::log_info() << this << " client handshake sent";
-                stats_.bytes_written += 4;
-            }
-            else
-            {
-                char buf[4] = { };
-                ssize_t read_result(::read(fd_, buf, sizeof(buf)));
-                if (read_result > 0) stats_.bytes_read += read_result;
-                wsrep::log_info() << this << " read server handshake: "
-                                  << read_result;
-                if (read_result == -1 &&
-                    (errno == EWOULDBLOCK || errno == EAGAIN))
-                {
-                    ret = wsrep::tls_service::want_read;
-                }
-                else if (read_result == 0)
-                {
-                    ret = wsrep::tls_service::eof;
-                }
-                else if (read_result != 4 || ::memcmp(buf, "serv", 4))
-                {
-                    ret = wsrep::tls_service::error;
-                }
-                else
-                {
-                    ret = wsrep::tls_service::success;
-                }
-                state_ = s_idle;
-            }
-            return ret;
-        }
+        enum wsrep::tls_service::status client_handshake();
 
-        enum wsrep::tls_service::status server_handshake()
-        {
-            enum wsrep::tls_service::status ret;
-            assert(state_ == s_initialized || state_ == s_server_handshake);
-            if (state_ == s_initialized)
-            {
-                ::send(fd_, "serv", 4, MSG_NOSIGNAL);
-                ret = wsrep::tls_service::want_read;
-                state_ = s_server_handshake;
-                stats_.bytes_written += 4;
-            }
-            else
-            {
-                char buf[4] = { };
-                ssize_t read_result(::read(fd_, buf, sizeof(buf)));
-                if (read_result > 0) stats_.bytes_read += read_result;
-                wsrep::log_info() << this << " read client handshake: "
-                                  << read_result;
-                if (read_result == -1 ||
-                    (errno == EWOULDBLOCK || errno == EAGAIN))
-                {
-                    ret = wsrep::tls_service::want_read;
-                }
-                else if (read_result == 0)
-                {
-                    ret = wsrep::tls_service::eof;
-                }
-                else if (read_result != 4 || ::memcmp(buf, "clie", 4))
-                {
-                    ret = wsrep::tls_service::error;
-                }
-                else
-                {
-                    ret = wsrep::tls_service::success;
-                    state_ = s_idle;
-                }
-            }
-            return ret;
-        }
+        enum wsrep::tls_service::status server_handshake();
 
         enum state state() const { return state_; }
 
@@ -155,11 +78,87 @@ namespace
         void inc_writes(size_t val) { stats_.bytes_written += val; }
         const stats& get_stats() const { return stats_; }
     private:
+        enum wsrep::tls_service::status handle_handshake_read(const char* expect);
+
         int fd_;
         enum state state_;
         stats stats_;
     };
+
+    enum wsrep::tls_service::status db_stream::client_handshake()
+    {
+        enum wsrep::tls_service::status ret;
+        assert(state_ == s_initialized || state_ == s_client_handshake);
+        if (state_ == s_initialized)
+        {
+            (void)::send(fd_, "clie", 4, MSG_NOSIGNAL);
+            ret = wsrep::tls_service::want_read;
+            state_ = s_client_handshake;
+            wsrep::log_info() << this << " client handshake sent";
+            stats_.bytes_written += 4;
+        }
+        else
+        {
+            if ((ret = handle_handshake_read("serv")) ==
+                wsrep::tls_service::success)
+            {
+                state_ = s_idle;
+            }
+        }
+        return ret;
+    }
+
+    enum wsrep::tls_service::status db_stream::server_handshake()
+    {
+        enum wsrep::tls_service::status ret;
+        assert(state_ == s_initialized || state_ == s_server_handshake);
+        if (state_ == s_initialized)
+        {
+            ::send(fd_, "serv", 4, MSG_NOSIGNAL);
+            ret = wsrep::tls_service::want_read;
+            state_ = s_server_handshake;
+            stats_.bytes_written += 4;
+        }
+        else
+        {
+            if ((ret = handle_handshake_read("clie")) ==
+                wsrep::tls_service::success)
+            {
+                state_ = s_idle;
+            }
+        }
+        return ret;
+    }
+
+    enum wsrep::tls_service::status db_stream::handle_handshake_read(
+        const char* expect)
+    {
+        assert(::strlen(expect) >= 4);
+        char buf[4] = { };
+        ssize_t read_result(::read(fd_, buf, sizeof(buf)));
+        if (read_result > 0) stats_.bytes_read += read_result;
+        enum wsrep::tls_service::status ret;
+        if (read_result == -1 &&
+            (errno == EWOULDBLOCK || errno == EAGAIN))
+        {
+            ret = wsrep::tls_service::want_read;
+        }
+        else if (read_result == 0)
+        {
+            ret = wsrep::tls_service::eof;
+        }
+        else if (read_result != 4 || ::memcmp(buf, expect, 4))
+        {
+            ret = wsrep::tls_service::error;
+        }
+        else
+        {
+            ret = wsrep::tls_service::success;
+        }
+        return ret;
+    }
 }
+
 
 static db_stream::stats global_stats;
 std::mutex global_stats_lock;
