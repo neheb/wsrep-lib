@@ -33,9 +33,17 @@ namespace db
         virtual void destroy(wsrep::tls_context*) WSREP_NOEXCEPT override;
         virtual wsrep::tls_stream* create_tls_stream(wsrep::tls_context*, int)
             WSREP_NOEXCEPT override;
-        virtual ssize_t client_handshake(wsrep::tls_stream*)
+        virtual int get_error_number(const wsrep::tls_stream*) const
             WSREP_NOEXCEPT override;
-        virtual ssize_t server_handshake(wsrep::tls_stream*)
+        virtual const void* get_error_category(const wsrep::tls_stream*) const
+            WSREP_NOEXCEPT override;
+        virtual const char* get_error_message(const wsrep::tls_stream*) const
+            WSREP_NOEXCEPT override;
+        virtual enum wsrep::tls_service::status
+        client_handshake(wsrep::tls_stream*)
+            WSREP_NOEXCEPT override;
+        virtual enum wsrep::tls_service::status
+        server_handshake(wsrep::tls_stream*)
             WSREP_NOEXCEPT override;
         virtual wsrep::tls_service::op_result
         read(wsrep::tls_stream*, void* buf, size_t max_count)

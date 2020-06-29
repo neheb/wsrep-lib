@@ -44,6 +44,7 @@ namespace
         db_stream(int fd)
             : fd_(fd)
             , state_(s_initialized)
+            , last_error_()
         { }
         struct stats
         {
@@ -67,9 +68,19 @@ namespace
             s_want_write
         };
 
+        int get_error_number() const { return last_error_; }
+        const void* get_error_category() const { return 0; }
+        const char* get_error_message() const
+        {
+            return ::strerror(last_error_);
+        }
         enum wsrep::tls_service::status client_handshake();
 
         enum wsrep::tls_service::status server_handshake();
+
+        wsrep::tls_service::op_result read(void*, size_t);
+
+        wsrep::tls_service::op_result write(const void*, size_t);
 
         enum state state() const { return state_; }
 
@@ -79,14 +90,17 @@ namespace
         const stats& get_stats() const { return stats_; }
     private:
         enum wsrep::tls_service::status handle_handshake_read(const char* expect);
+        void clear_error() { last_error_ = 0; }
 
         int fd_;
         enum state state_;
+        int last_error_;
         stats stats_;
     };
 
     enum wsrep::tls_service::status db_stream::client_handshake()
     {
+        clear_error();
         enum wsrep::tls_service::status ret;
         assert(state_ == s_initialized || state_ == s_client_handshake);
         if (state_ == s_initialized)
@@ -110,6 +124,7 @@ namespace
 
     enum wsrep::tls_service::status db_stream::server_handshake()
     {
+        clear_error();
         enum wsrep::tls_service::status ret;
         assert(state_ == s_initialized || state_ == s_server_handshake);
         if (state_ == s_initialized)
@@ -157,6 +172,63 @@ namespace
         }
         return ret;
     }
+
+    wsrep::tls_service::op_result db_stream::read(void* buf, size_t max_count)
+    {
+        clear_error();
+        ssize_t read_result(::read(fd_, buf, max_count));
+        if (read_result > 0)
+        {
+            inc_reads(read_result);
+            return wsrep::tls_service::op_result{
+                wsrep::tls_service::success, size_t(read_result)};
+        }
+        else if (read_result == 0)
+        {
+            return wsrep::tls_service::op_result{
+                wsrep::tls_service::eof, 0};
+        }
+        else if (errno == EAGAIN || errno == EWOULDBLOCK)
+        {
+            return wsrep::tls_service::op_result{
+                wsrep::tls_service::want_read, 0};
+        }
+        else
+        {
+            last_error_ = errno;
+            return wsrep::tls_service::op_result{
+                wsrep::tls_service::error, 0};
+        }
+    }
+
+    wsrep::tls_service::op_result db_stream::write(
+        const void* buf, size_t count)
+    {
+        clear_error();
+        ssize_t write_result(::send(fd_, buf, count, MSG_NOSIGNAL));
+        if (write_result > 0)
+        {
+            inc_writes(write_result);
+            return wsrep::tls_service::op_result{
+                wsrep::tls_service::success, size_t(write_result)};
+        }
+        else if (write_result == 0)
+        {
+            return wsrep::tls_service::op_result{
+                wsrep::tls_service::eof, 0};
+        }
+        else if (errno == EAGAIN || errno == EWOULDBLOCK)
+        {
+            return wsrep::tls_service::op_result{
+                wsrep::tls_service::want_write, 0};
+        }
+        else
+        {
+            last_error_ = errno;
+            return wsrep::tls_service::op_result{
+                wsrep::tls_service::error, 0};
+        }
+    }
 }
 
 
@@ -188,72 +260,48 @@ wsrep::tls_stream* db::tls::create_tls_stream(
     return ret;
 }
 
-ssize_t db::tls::client_handshake(wsrep::tls_stream* stream) WSREP_NOEXCEPT
+int db::tls::get_error_number(const wsrep::tls_stream* stream)
+    const WSREP_NOEXCEPT
 {
-    return reinterpret_cast<db_stream*>(stream)->client_handshake();
+    return static_cast<const db_stream*>(stream)->get_error_number();
 }
 
-ssize_t db::tls::server_handshake(wsrep::tls_stream* stream) WSREP_NOEXCEPT
+const void* db::tls::get_error_category(const wsrep::tls_stream* stream)
+    const WSREP_NOEXCEPT
 {
-    return reinterpret_cast<db_stream*>(stream)->server_handshake();
+    return static_cast<const db_stream*>(stream)->get_error_category();
+}
+
+const char* db::tls::get_error_message(const wsrep::tls_stream* stream)
+    const WSREP_NOEXCEPT
+{
+    return static_cast<const db_stream*>(stream)->get_error_message();
+}
+
+enum wsrep::tls_service::status
+db::tls::client_handshake(wsrep::tls_stream* stream) WSREP_NOEXCEPT
+{
+    return static_cast<db_stream*>(stream)->client_handshake();
+}
+
+enum wsrep::tls_service::status
+db::tls::server_handshake(wsrep::tls_stream* stream) WSREP_NOEXCEPT
+{
+    return static_cast<db_stream*>(stream)->server_handshake();
 }
 
 wsrep::tls_service::op_result db::tls::read(
     wsrep::tls_stream* stream,
     void* buf, size_t max_count) WSREP_NOEXCEPT
 {
-    auto dbs(static_cast<db_stream*>(stream));
-    ssize_t read_result(::read(dbs->fd(), buf, max_count));
-    if (read_result > 0)
-    {
-        dbs->inc_reads(read_result);
-        return wsrep::tls_service::op_result{
-            wsrep::tls_service::success, size_t(read_result)};
-    }
-    else if (read_result == 0)
-    {
-        return wsrep::tls_service::op_result{
-            wsrep::tls_service::eof, 0};
-    }
-    else if (errno == EAGAIN || errno == EWOULDBLOCK)
-    {
-        return wsrep::tls_service::op_result{
-            wsrep::tls_service::want_read, 0};
-    }
-    else
-    {
-        return wsrep::tls_service::op_result{
-            read_result, 0};
-    }
+    return static_cast<db_stream*>(stream)->read(buf, max_count);
 }
 
 wsrep::tls_service::op_result db::tls::write(
     wsrep::tls_stream* stream,
     const void* buf, size_t count) WSREP_NOEXCEPT
 {
-    auto dbs(static_cast<db_stream*>(stream));
-    ssize_t write_result(::send(dbs->fd(), buf, count, MSG_NOSIGNAL));
-    if (write_result > 0)
-    {
-        dbs->inc_writes(write_result);
-        return wsrep::tls_service::op_result{
-            wsrep::tls_service::success, size_t(write_result)};
-    }
-    else if (write_result == 0)
-    {
-        return wsrep::tls_service::op_result{
-            wsrep::tls_service::eof, 0};
-    }
-    else if (errno == EAGAIN || errno == EWOULDBLOCK)
-    {
-        return wsrep::tls_service::op_result{
-            wsrep::tls_service::want_write, 0};
-    }
-    else
-    {
-        return wsrep::tls_service::op_result{
-            write_result, 0};
-    }
+    return static_cast<db_stream*>(stream)->write(buf, count);
 }
 
 void db::tls::shutdown(wsrep::tls_stream* stream) WSREP_NOEXCEPT

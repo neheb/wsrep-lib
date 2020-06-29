@@ -72,15 +72,18 @@ namespace wsrep
         virtual tls_stream* create_tls_stream(tls_context*, int fd)
             WSREP_NOEXCEPT = 0;
 
+        virtual int get_error_number(const tls_stream*) const WSREP_NOEXCEPT = 0;
+        virtual const void* get_error_category(const tls_stream*) const WSREP_NOEXCEPT = 0;
+        virtual const char* get_error_message(const tls_stream*) const WSREP_NOEXCEPT = 0;
         /**
-         * @return Status enum or negative error code.
+         * @return Status enum.
          */
-        virtual ssize_t client_handshake(tls_stream*) WSREP_NOEXCEPT = 0;
+        virtual status client_handshake(tls_stream*) WSREP_NOEXCEPT = 0;
 
         /**
          * @return Status enum or negative error code.
          */
-        virtual ssize_t server_handshake(tls_stream*) WSREP_NOEXCEPT = 0;
+        virtual status server_handshake(tls_stream*) WSREP_NOEXCEPT = 0;
 
         /**
          * Read at most max_count bytes into buf.
