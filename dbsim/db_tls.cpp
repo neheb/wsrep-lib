@@ -27,8 +27,14 @@
 
 #include "wsrep/logger.hpp"
 
-#include <unistd.h> // read()/write()
+#include <unistd.h> // read()
+#include <sys/types.h>
+#include <sys/socket.h> // send()
 #include <cerrno>
+#include <cstring>
+
+#include <mutex>
+#include <string>
 
 namespace
 {
@@ -37,21 +43,134 @@ namespace
     public:
         db_stream(int fd)
             : fd_(fd)
+            , state_(s_initialized)
         { }
         struct stats
         {
             size_t bytes_read{0};
             size_t bytes_written{0};
         };
+
+        /*
+         *    in       |--> idle --|
+         *     |-> ch -|      ^    | -> want_read  --|
+         *     |-> sh -|      |    | -> want_write --|
+         *                    |----------------------|
+         */
+        enum state
+        {
+            s_initialized,
+            s_client_handshake,
+            s_server_handshake,
+            s_idle,
+            s_want_read,
+            s_want_write
+        };
+
+        enum wsrep::tls_service::status client_handshake()
+        {
+            enum wsrep::tls_service::status ret;
+            assert(state_ == s_initialized || state_ == s_client_handshake);
+            if (state_ == s_initialized)
+            {
+                (void)::send(fd_, "clie", 4, MSG_NOSIGNAL);
+                ret = wsrep::tls_service::want_read;
+                state_ = s_client_handshake;
+                wsrep::log_info() << this << " client handshake sent";
+                stats_.bytes_written += 4;
+            }
+            else
+            {
+                char buf[4] = { };
+                ssize_t read_result(::read(fd_, buf, sizeof(buf)));
+                if (read_result > 0) stats_.bytes_read += read_result;
+                wsrep::log_info() << this << " read server handshake: "
+                                  << read_result;
+                if (read_result == -1 &&
+                    (errno == EWOULDBLOCK || errno == EAGAIN))
+                {
+                    ret = wsrep::tls_service::want_read;
+                }
+                else if (read_result == 0)
+                {
+                    ret = wsrep::tls_service::eof;
+                }
+                else if (read_result != 4 || ::memcmp(buf, "serv", 4))
+                {
+                    ret = wsrep::tls_service::error;
+                }
+                else
+                {
+                    ret = wsrep::tls_service::success;
+                }
+                state_ = s_idle;
+            }
+            return ret;
+        }
+
+        enum wsrep::tls_service::status server_handshake()
+        {
+            enum wsrep::tls_service::status ret;
+            assert(state_ == s_initialized || state_ == s_server_handshake);
+            if (state_ == s_initialized)
+            {
+                ::send(fd_, "serv", 4, MSG_NOSIGNAL);
+                ret = wsrep::tls_service::want_read;
+                state_ = s_server_handshake;
+                stats_.bytes_written += 4;
+            }
+            else
+            {
+                char buf[4] = { };
+                ssize_t read_result(::read(fd_, buf, sizeof(buf)));
+                if (read_result > 0) stats_.bytes_read += read_result;
+                wsrep::log_info() << this << " read client handshake: "
+                                  << read_result;
+                if (read_result == -1 ||
+                    (errno == EWOULDBLOCK || errno == EAGAIN))
+                {
+                    ret = wsrep::tls_service::want_read;
+                }
+                else if (read_result == 0)
+                {
+                    ret = wsrep::tls_service::eof;
+                }
+                else if (read_result != 4 || ::memcmp(buf, "clie", 4))
+                {
+                    ret = wsrep::tls_service::error;
+                }
+                else
+                {
+                    ret = wsrep::tls_service::success;
+                    state_ = s_idle;
+                }
+            }
+            return ret;
+        }
+
+        enum state state() const { return state_; }
+
         int fd() const { return fd_; }
         void inc_reads(size_t val) { stats_.bytes_read += val; }
         void inc_writes(size_t val) { stats_.bytes_written += val; }
         const stats& get_stats() const { return stats_; }
     private:
         int fd_;
+        enum state state_;
         stats stats_;
     };
 }
+
+static db_stream::stats global_stats;
+std::mutex global_stats_lock;
+
+static void merge_to_global_stats(const db_stream::stats& stats)
+{
+    std::lock_guard<std::mutex> lock(global_stats_lock);
+    global_stats.bytes_read += stats.bytes_read;
+    global_stats.bytes_written += stats.bytes_written;
+}
+
 
 
 wsrep::tls_context* db::tls::create_tls_context() WSREP_NOEXCEPT
@@ -66,20 +185,18 @@ wsrep::tls_stream* db::tls::create_tls_stream(
     wsrep::tls_context*, int fd) WSREP_NOEXCEPT
 {
     auto ret(new db_stream(fd));
-    wsrep::log_info() << "New DB stream: " << ret;
+    wsrep::log_debug() << "New DB stream: " << ret;
     return ret;
 }
 
-ssize_t db::tls::client_handshake(wsrep::tls_stream*) WSREP_NOEXCEPT
+ssize_t db::tls::client_handshake(wsrep::tls_stream* stream) WSREP_NOEXCEPT
 {
-    // @todo: Emulate non-blocking handshake.
-    return wsrep::tls_service::success;
+    return reinterpret_cast<db_stream*>(stream)->client_handshake();
 }
 
-ssize_t db::tls::server_handshake(wsrep::tls_stream*) WSREP_NOEXCEPT
+ssize_t db::tls::server_handshake(wsrep::tls_stream* stream) WSREP_NOEXCEPT
 {
-    // @todo: Emulate non-blocking handshake.
-    return wsrep::tls_service::success;
+    return reinterpret_cast<db_stream*>(stream)->server_handshake();
 }
 
 wsrep::tls_service::op_result db::tls::read(
@@ -116,7 +233,7 @@ wsrep::tls_service::op_result db::tls::write(
     const void* buf, size_t count) WSREP_NOEXCEPT
 {
     auto dbs(static_cast<db_stream*>(stream));
-    ssize_t write_result(::write(dbs->fd(), buf, count));
+    ssize_t write_result(::send(dbs->fd(), buf, count, MSG_NOSIGNAL));
     if (write_result > 0)
     {
         dbs->inc_writes(write_result);
@@ -143,8 +260,18 @@ wsrep::tls_service::op_result db::tls::write(
 void db::tls::shutdown(wsrep::tls_stream* stream) WSREP_NOEXCEPT
 {
     auto dbs(static_cast<db_stream*>(stream));
-    wsrep::log_info() << "Stream shutdown: " << dbs->get_stats().bytes_read
+    merge_to_global_stats(dbs->get_stats());
+    wsrep::log_debug() << "Stream shutdown: " << dbs->get_stats().bytes_read
                       << " " << dbs->get_stats().bytes_written;
-    wsrep::log_info() << "Stream pointer" << dbs;
+    wsrep::log_debug() << "Stream pointer" << dbs;
     delete dbs;
+}
+
+std::string db::tls::stats()
+{
+    std::ostringstream oss;
+    oss << "Transport stats:\n"
+        << "  bytes_read: " << global_stats.bytes_read << "\n"
+        << "  bytes_written: " << global_stats.bytes_written << "\n";
+    return oss.str();
 }

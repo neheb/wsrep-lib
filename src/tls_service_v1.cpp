@@ -78,6 +78,8 @@ namespace wsrep_tls_service_v1
             return wsrep_tls_result_want_write;
         case wsrep::tls_service::eof:
             return wsrep_tls_result_eof;
+        case wsrep::tls_service::error:
+            return wsrep_tls_result_error;
         default:
             assert(status < 0);
             return wsrep_tls_result_error;

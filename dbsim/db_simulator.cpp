@@ -38,6 +38,7 @@ void db::simulator::run()
     std::cout << "Results:\n";
     std::cout << stats() << std::endl;
     std::cout << db::ti::stats() << std::endl;
+    std::cout << db::tls::stats() << std::endl;
 }
 
 void db::simulator::sst(db::server& server,

@@ -51,7 +51,8 @@ namespace wsrep
             success = 0,
             want_read,
             want_write,
-            eof
+            eof,
+            error
         };
 
         struct op_result

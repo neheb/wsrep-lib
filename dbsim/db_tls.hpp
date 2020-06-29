@@ -22,6 +22,8 @@
 
 #include "wsrep/tls_service.hpp"
 
+#include <string>
+
 namespace db
 {
     class tls : public wsrep::tls_service
@@ -42,6 +44,8 @@ namespace db
         write(wsrep::tls_stream*, const void* buf, size_t count)
             WSREP_NOEXCEPT override;
         virtual void shutdown(wsrep::tls_stream*) WSREP_NOEXCEPT override;
+
+        static std::string stats();
     };
 };
 
