@@ -114,7 +114,23 @@ namespace
             else if (::rand() % 100 == 0) return std::min(size_t(43), count);
             else return count;
         }
+
+        ssize_t do_read(void* buf, size_t max_count)
+        {
+            if (mode_ < 2 ) return ::read(fd_, buf, max_count);
+            else if (::rand() % 1000 == 0) return EINTR;
+            else return ::read(fd_, buf, max_count);
+        }
+
+        ssize_t do_write(const void* buf, size_t count)
+        {
+            if (mode_ < 2) return ::send(fd_, buf, count, MSG_NOSIGNAL);
+            else if (::rand() % 1000 == 0) return EINTR;
+            else return ::send(fd_, buf, count, MSG_NOSIGNAL);
+        }
+
         void clear_error() { last_error_ = 0; }
+
         int fd_;
         enum state state_;
         int last_error_;
@@ -204,7 +220,7 @@ namespace
     {
         clear_error();
         max_count = determine_read_count(max_count);
-        ssize_t read_result(::read(fd_, buf, max_count));
+        ssize_t read_result(do_read(buf, max_count));
         if (read_result > 0)
         {
             inc_reads(read_result);
@@ -234,7 +250,7 @@ namespace
     {
         clear_error();
         count = determine_write_count(count);
-        ssize_t write_result(::send(fd_, buf, count, MSG_NOSIGNAL));
+        ssize_t write_result(do_write(buf, count));
         if (write_result > 0)
         {
             inc_writes(write_result);
