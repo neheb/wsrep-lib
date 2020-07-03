@@ -55,9 +55,9 @@ namespace
         };
 
         /*
-         *    in       |--> idle --|
+         *    in            idle --|
          *     |-> ch -|      ^    | -> want_read  --|
-         *     |-> sh -|      |    | -> want_write --|
+         *     |-> sh -| ---- |--> | -> want_write --|
          *                    |----------------------|
          */
         enum state
@@ -117,16 +117,66 @@ namespace
 
         ssize_t do_read(void* buf, size_t max_count)
         {
-            if (mode_ < 2 ) return ::read(fd_, buf, max_count);
+            if (mode_ < 3 ) return ::read(fd_, buf, max_count);
             else if (::rand() % 1000 == 0) return EINTR;
             else return ::read(fd_, buf, max_count);
         }
 
         ssize_t do_write(const void* buf, size_t count)
         {
-            if (mode_ < 2) return ::send(fd_, buf, count, MSG_NOSIGNAL);
+            if (mode_ < 3) return ::send(fd_, buf, count, MSG_NOSIGNAL);
             else if (::rand() % 1000 == 0) return EINTR;
             else return ::send(fd_, buf, count, MSG_NOSIGNAL);
+        }
+
+        wsrep::tls_service::op_result map_success(ssize_t result)
+        {
+            if (mode_ < 2)
+            {
+                return wsrep::tls_service::op_result{
+                    wsrep::tls_service::success, size_t(result)};
+            }
+            else if (::rand() % 1000 == 0)
+            {
+                state_ = s_want_read;
+                return wsrep::tls_service::op_result{
+                    wsrep::tls_service::want_read, size_t(result)};
+            }
+            else if (::rand() % 1000 == 0)
+            {
+                state_ = s_want_write;
+                return wsrep::tls_service::op_result{
+                    wsrep::tls_service::want_write, size_t(result)};
+            }
+            else
+            {
+                return wsrep::tls_service::op_result{
+                    wsrep::tls_service::success, size_t(result)};
+            }
+        }
+
+        wsrep::tls_service::op_result map_result(ssize_t result)
+        {
+            if (result > 0)
+            {
+                return map_success(result);
+            }
+            else if (result == 0)
+            {
+                return wsrep::tls_service::op_result{
+                    wsrep::tls_service::eof, 0};
+            }
+            else if (errno == EAGAIN || errno == EWOULDBLOCK)
+            {
+                return wsrep::tls_service::op_result{
+                    wsrep::tls_service::want_read, 0};
+            }
+            else
+            {
+                last_error_ = errno;
+                return wsrep::tls_service::op_result{
+                    wsrep::tls_service::error, 0};
+            }
         }
 
         void clear_error() { last_error_ = 0; }
@@ -145,7 +195,9 @@ namespace
     {
         clear_error();
         enum wsrep::tls_service::status ret;
-        assert(state_ == s_initialized || state_ == s_client_handshake);
+        assert(state_ == s_initialized ||
+               state_ == s_client_handshake ||
+               state_ = s_want_write);
         if (state_ == s_initialized)
         {
             (void)::send(fd_, "clie", 4, MSG_NOSIGNAL);
@@ -154,13 +206,24 @@ namespace
             wsrep::log_info() << this << " client handshake sent";
             stats_.bytes_written += 4;
         }
-        else
+        else if (state_ == s_client_handshake)
         {
             if ((ret = handle_handshake_read("serv")) ==
                 wsrep::tls_service::success)
             {
-                state_ = s_idle;
+                state_ = s_want_write;
+                ret = wsrep::tls_service::want_write;
             }
+        }
+        else if (state_ == s_want_write)
+        {
+            state_ = s_idle;
+            ret = wsrep::tls_service::success;
+        }
+        else
+        {
+            last_error_ = EPROTO;
+            ret = wsrep::tls_service::error;
         }
         return ret;
     }
@@ -169,7 +232,9 @@ namespace
     {
         clear_error();
         enum wsrep::tls_service::status ret;
-        assert(state_ == s_initialized || state_ == s_server_handshake);
+        assert(state_ == s_initialized ||
+               state_ == s_server_handshake ||
+               state_ == s_want_write);
         if (state_ == s_initialized)
         {
             ::send(fd_, "serv", 4, MSG_NOSIGNAL);
@@ -177,13 +242,24 @@ namespace
             state_ = s_server_handshake;
             stats_.bytes_written += 4;
         }
-        else
+        else if (state_ == s_server_handshake)
         {
             if ((ret = handle_handshake_read("clie")) ==
                 wsrep::tls_service::success)
             {
-                state_ = s_idle;
+                state_ = s_want_read;
+                ret = wsrep::tls_service::want_read;
             }
+        }
+        else if (state_ == s_want_write)
+        {
+            state_ = s_idle;
+            ret = wsrep::tls_service::success;
+        }
+        else
+        {
+            last_error_ = EPROTO;
+            ret = wsrep::tls_service::error;
         }
         return ret;
     }
@@ -207,10 +283,12 @@ namespace
         }
         else if (read_result != 4 || ::memcmp(buf, expect, 4))
         {
+            last_error_ = EPROTO;
             ret = wsrep::tls_service::error;
         }
         else
         {
+            wsrep::log_info() << "Handshake success: " << std::string(buf, 4);
             ret = wsrep::tls_service::success;
         }
         return ret;
@@ -219,60 +297,40 @@ namespace
     wsrep::tls_service::op_result db_stream::read(void* buf, size_t max_count)
     {
         clear_error();
+        if (state_ == s_want_read)
+        {
+            state_ = s_idle;
+            if (max_count == 0)
+                return wsrep::tls_service::op_result{
+                    wsrep::tls_service::success, 0};
+        }
         max_count = determine_read_count(max_count);
         ssize_t read_result(do_read(buf, max_count));
         if (read_result > 0)
         {
             inc_reads(read_result);
-            return wsrep::tls_service::op_result{
-                wsrep::tls_service::success, size_t(read_result)};
         }
-        else if (read_result == 0)
-        {
-            return wsrep::tls_service::op_result{
-                wsrep::tls_service::eof, 0};
-        }
-        else if (errno == EAGAIN || errno == EWOULDBLOCK)
-        {
-            return wsrep::tls_service::op_result{
-                wsrep::tls_service::want_read, 0};
-        }
-        else
-        {
-            last_error_ = errno;
-            return wsrep::tls_service::op_result{
-                wsrep::tls_service::error, 0};
-        }
+        return map_result(read_result);
     }
 
     wsrep::tls_service::op_result db_stream::write(
         const void* buf, size_t count)
     {
         clear_error();
+        if (state_ == s_want_write)
+        {
+            state_ = s_idle;
+            if (count == 0)
+                return wsrep::tls_service::op_result{
+                    wsrep::tls_service::success, 0};
+        }
         count = determine_write_count(count);
         ssize_t write_result(do_write(buf, count));
         if (write_result > 0)
         {
             inc_writes(write_result);
-            return wsrep::tls_service::op_result{
-                wsrep::tls_service::success, size_t(write_result)};
         }
-        else if (write_result == 0)
-        {
-            return wsrep::tls_service::op_result{
-                wsrep::tls_service::eof, 0};
-        }
-        else if (errno == EAGAIN || errno == EWOULDBLOCK)
-        {
-            return wsrep::tls_service::op_result{
-                wsrep::tls_service::want_write, 0};
-        }
-        else
-        {
-            last_error_ = errno;
-            return wsrep::tls_service::op_result{
-                wsrep::tls_service::error, 0};
-        }
+        return map_result(write_result);
     }
 }
 

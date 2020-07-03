@@ -89,8 +89,9 @@ db::params db::parse_args(int argc, char** argv)
          " Effective only if thread-instrumentation is enabled")
         ("tls-service",
          po::value<int>(&params.tls_service),
-         "Enable TLS service stubs. (0 default disabled, 1 enabled, 2 "
-         "enabled with short read/write simulation)")
+         "Configure TLS service stubs.\n0 default disabled\n1 enabled\n"
+         "2 enabled with short read/write and renegotiation simulation\n"
+         "3 enabled with error simulation.")
         ;
     try
     {
