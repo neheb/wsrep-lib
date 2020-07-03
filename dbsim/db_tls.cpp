@@ -247,8 +247,8 @@ namespace
             if ((ret = handle_handshake_read("clie")) ==
                 wsrep::tls_service::success)
             {
-                state_ = s_want_read;
-                ret = wsrep::tls_service::want_read;
+                state_ = s_want_write;
+                ret = wsrep::tls_service::want_write;
             }
         }
         else if (state_ == s_want_write)
