@@ -138,12 +138,14 @@ namespace
             }
             else if (::rand() % 1000 == 0)
             {
+                wsrep::log_info() << "Success want extra read";
                 state_ = s_want_read;
                 return wsrep::tls_service::op_result{
                     wsrep::tls_service::want_read, size_t(result)};
             }
             else if (::rand() % 1000 == 0)
             {
+                wsrep::log_info() << "Success want extra write";
                 state_ = s_want_write;
                 return wsrep::tls_service::op_result{
                     wsrep::tls_service::want_write, size_t(result)};
