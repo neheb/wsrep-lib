@@ -71,11 +71,16 @@ namespace
         };
 
         int get_error_number() const { return last_error_; }
-        const void* get_error_category() const { return 0; }
+        const void* get_error_category() const
+        {
+            return reinterpret_cast<const void*>(1);
+        }
+
         static char* get_error_message(int value, const void*)
         {
             return ::strdup(::strerror(value));
         }
+
         static void free_error_message(char* msg)
         {
             ::free(msg);
