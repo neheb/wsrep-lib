@@ -82,12 +82,17 @@ namespace wsrep_tls_service_v1
             reinterpret_cast<const wsrep::tls_stream*>(stream->opaque));
     }
 
-    static const char* tls_stream_get_error_message_cb(
-        const wsrep_tls_stream_t* stream)
+    static char* tls_error_message_get_cb(
+        int value, const void* category)
     {
         assert(tls_service_impl);
-        return tls_service_impl->get_error_message(
-            reinterpret_cast<const wsrep::tls_stream*>(stream->opaque));
+        return tls_service_impl->get_error_message(value, category);
+    }
+
+    static void tls_error_message_free_cb(char* msg)
+    {
+        assert(tls_service_impl);
+        tls_service_impl->free_error_message(msg);
     }
 
     static enum wsrep_tls_result map_return_value(ssize_t status)
@@ -161,11 +166,12 @@ namespace wsrep_tls_service_v1
     {
         tls_context_create_cb,
         tls_context_free_cb,
+        tls_error_message_get_cb,
+        tls_error_message_free_cb,
         tls_stream_init_cb,
         tls_stream_shutdown_cb,
         tls_stream_get_error_number_cb,
         tls_stream_get_error_category_cb,
-        tls_stream_get_error_message_cb,
         tls_stream_client_handshake_cb,
         tls_stream_server_handshake_cb,
         tls_stream_read_cb,

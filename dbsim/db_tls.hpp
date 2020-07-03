@@ -37,8 +37,9 @@ namespace db
             WSREP_NOEXCEPT override;
         virtual const void* get_error_category(const wsrep::tls_stream*) const
             WSREP_NOEXCEPT override;
-        virtual const char* get_error_message(const wsrep::tls_stream*) const
+        virtual char* get_error_message(int, const void*) const
             WSREP_NOEXCEPT override;
+        virtual void free_error_message(char* ) const WSREP_NOEXCEPT override;
         virtual enum wsrep::tls_service::status
         client_handshake(wsrep::tls_stream*)
             WSREP_NOEXCEPT override;

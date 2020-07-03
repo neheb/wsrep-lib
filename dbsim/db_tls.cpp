@@ -72,10 +72,15 @@ namespace
 
         int get_error_number() const { return last_error_; }
         const void* get_error_category() const { return 0; }
-        const char* get_error_message() const
+        static char* get_error_message(int value, const void*)
         {
-            return ::strerror(last_error_);
+            return ::strdup(::strerror(value));
         }
+        static void free_error_message(char* msg)
+        {
+            ::free(msg);
+        }
+
         enum wsrep::tls_service::status client_handshake();
 
         enum wsrep::tls_service::status server_handshake();
@@ -262,8 +267,6 @@ static void merge_to_global_stats(const db_stream::stats& stats)
     global_stats.bytes_written += stats.bytes_written;
 }
 
-
-
 wsrep::tls_context* db::tls::create_tls_context() WSREP_NOEXCEPT
 {
     return reinterpret_cast<wsrep::tls_context*>(1);
@@ -292,10 +295,15 @@ const void* db::tls::get_error_category(const wsrep::tls_stream* stream)
     return static_cast<const db_stream*>(stream)->get_error_category();
 }
 
-const char* db::tls::get_error_message(const wsrep::tls_stream* stream)
+char* db::tls::get_error_message(int value, const void* category)
     const WSREP_NOEXCEPT
 {
-    return static_cast<const db_stream*>(stream)->get_error_message();
+    return db_stream::get_error_message(value, category);
+}
+
+void db::tls::free_error_message(char* msg) const WSREP_NOEXCEPT
+{
+    return db_stream::free_error_message(msg);
 }
 
 enum wsrep::tls_service::status
