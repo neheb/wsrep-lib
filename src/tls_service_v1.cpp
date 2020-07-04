@@ -59,12 +59,15 @@ namespace wsrep_tls_service_v1
         return 0;
     }
 
-    static void tls_stream_shutdown_cb(wsrep_tls_stream_t* stream)
+    static enum wsrep_tls_result
+    tls_stream_shutdown_cb(wsrep_tls_stream_t* stream)
     {
         assert(tls_service_impl);
+        // @todo Handle other values than success.
         tls_service_impl->shutdown(
             reinterpret_cast<wsrep::tls_stream*>(stream->opaque));
         stream->opaque = 0;
+        return wsrep_tls_result_success;
     }
 
     static int tls_stream_get_error_number_cb(const wsrep_tls_stream_t* stream)
