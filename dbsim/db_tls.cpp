@@ -364,6 +364,16 @@ wsrep::tls_stream* db::tls::create_tls_stream(
     return ret;
 }
 
+void db::tls::destroy(wsrep::tls_stream* stream) WSREP_NOEXCEPT
+{
+    auto dbs(static_cast<db_stream*>(stream));
+    merge_to_global_stats(dbs->get_stats());
+    wsrep::log_debug() << "Stream destroy: " << dbs->get_stats().bytes_read
+                       << " " << dbs->get_stats().bytes_written;
+    wsrep::log_debug() << "Stream destroy" << dbs;
+    delete dbs;
+}
+
 int db::tls::get_error_number(const wsrep::tls_stream* stream)
     const WSREP_NOEXCEPT
 {
@@ -413,15 +423,13 @@ wsrep::tls_service::op_result db::tls::write(
     return static_cast<db_stream*>(stream)->write(buf, count);
 }
 
-void db::tls::shutdown(wsrep::tls_stream* stream) WSREP_NOEXCEPT
+wsrep::tls_service::status
+db::tls::shutdown(wsrep::tls_stream*) WSREP_NOEXCEPT
 {
-    auto dbs(static_cast<db_stream*>(stream));
-    merge_to_global_stats(dbs->get_stats());
-    wsrep::log_debug() << "Stream shutdown: " << dbs->get_stats().bytes_read
-                      << " " << dbs->get_stats().bytes_written;
-    wsrep::log_debug() << "Stream pointer" << dbs;
-    delete dbs;
+    // @todo error simulation
+    return wsrep::tls_service::success;
 }
+
 
 void db::tls::init(int mode)
 {

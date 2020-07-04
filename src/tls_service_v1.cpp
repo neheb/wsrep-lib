@@ -59,15 +59,12 @@ namespace wsrep_tls_service_v1
         return 0;
     }
 
-    static enum wsrep_tls_result
-    tls_stream_shutdown_cb(wsrep_tls_stream_t* stream)
+    static void tls_stream_deinit_cb(
+        wsrep_tls_stream_t* stream)
     {
         assert(tls_service_impl);
-        // @todo Handle other values than success.
-        tls_service_impl->shutdown(
+        tls_service_impl->destroy(
             reinterpret_cast<wsrep::tls_stream*>(stream->opaque));
-        stream->opaque = 0;
-        return wsrep_tls_result_success;
     }
 
     static int tls_stream_get_error_number_cb(const wsrep_tls_stream_t* stream)
@@ -165,6 +162,16 @@ namespace wsrep_tls_service_v1
         return map_return_value(result.status);
     }
 
+    static enum wsrep_tls_result
+    tls_stream_shutdown_cb(wsrep_tls_stream_t* stream)
+    {
+        assert(tls_service_impl);
+        // @todo Handle other values than success.
+        return map_return_value(
+            tls_service_impl->shutdown(
+                reinterpret_cast<wsrep::tls_stream*>(stream->opaque)));
+    }
+
     static wsrep_tls_service_v1_t tls_service_callbacks =
     {
         tls_context_create_cb,
@@ -172,13 +179,15 @@ namespace wsrep_tls_service_v1
         tls_error_message_get_cb,
         tls_error_message_free_cb,
         tls_stream_init_cb,
-        tls_stream_shutdown_cb,
+        tls_stream_deinit_cb,
         tls_stream_get_error_number_cb,
         tls_stream_get_error_category_cb,
         tls_stream_client_handshake_cb,
         tls_stream_server_handshake_cb,
         tls_stream_read_cb,
-        tls_stream_write_cb
+        tls_stream_write_cb,
+        tls_stream_shutdown_cb
+
     };
 
 
