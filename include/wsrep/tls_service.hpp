@@ -63,9 +63,7 @@ namespace wsrep
             size_t bytes_transferred;
         };
 
-        virtual tls_context* create_tls_context() WSREP_NOEXCEPT = 0;
-        virtual void destroy(tls_context*) WSREP_NOEXCEPT = 0;
-
+        virtual ~tls_service() { }
         /**
          * @return Zero on success, system error code on failure.
          */

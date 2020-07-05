@@ -33,15 +33,12 @@ namespace wsrep_tls_service_v1
     static wsrep_tls_context_t* tls_context_create_cb()
     {
         assert(tls_service_impl);
-        return reinterpret_cast<wsrep_tls_context_t*>(
-            tls_service_impl->create_tls_context());
+        return reinterpret_cast<wsrep_tls_context_t*>(0x1);
     }
 
-    static void tls_context_free_cb(wsrep_tls_context_t* context)
+    static void tls_context_free_cb(wsrep_tls_context_t*)
     {
         assert(tls_service_impl);
-        tls_service_impl->destroy(
-            reinterpret_cast<wsrep::tls_context*>(context));
     }
 
     static int tls_stream_init_cb(
