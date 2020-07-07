@@ -73,9 +73,8 @@ namespace wsrep
 
         virtual int get_error_number(const tls_stream*) const WSREP_NOEXCEPT = 0;
         virtual const void* get_error_category(const tls_stream*) const WSREP_NOEXCEPT = 0;
-        virtual char* get_error_message(int value, const void* category)
+        virtual const char* get_error_message(int value, const void* category)
             const WSREP_NOEXCEPT = 0;
-        virtual void free_error_message(char* msg) const WSREP_NOEXCEPT = 0;
         /**
          * @return Status enum.
          */
