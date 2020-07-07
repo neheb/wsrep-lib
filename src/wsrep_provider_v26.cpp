@@ -604,6 +604,14 @@ namespace
         return 0;
     }
 
+    static void deinit_thread_service(void* dlh)
+    {
+        if (not wsrep::thread_service_v1_probe(dlh))
+        {
+            wsrep::thread_service_v1_deinit(dlh);
+        }
+    }
+
     static int init_tls_service(void* dlh,
                                 wsrep::tls_service* tls_service)
     {
@@ -614,6 +622,15 @@ namespace
         }
         return 0;
     }
+
+    static void deinit_tls_service(void* dlh)
+    {
+        if (not wsrep::tls_service_v1_probe(dlh))
+        {
+            wsrep::tls_service_v1_deinit(dlh);
+        }
+    }
+
 }
 
 wsrep::wsrep_provider_v26::wsrep_provider_v26(
@@ -662,6 +679,7 @@ wsrep::wsrep_provider_v26::wsrep_provider_v26(
     {
         throw wsrep::runtime_error("Failed to initialize thread service");
     }
+
     if (services.tls_service &&
         init_tls_service(wsrep_->dlh, services.tls_service))
     {
@@ -687,9 +705,15 @@ wsrep::wsrep_provider_v26::wsrep_provider_v26(
     }
 }
 
+extern "C" void cleanup_fn(wsrep_t* wsrep)
+{
+    deinit_tls_service(wsrep->dlh);
+    deinit_thread_service(wsrep->dlh);
+}
+
 wsrep::wsrep_provider_v26::~wsrep_provider_v26()
 {
-    wsrep_unload(wsrep_);
+    wsrep_cleanup_unload(wsrep_, cleanup_fn);
 }
 
 enum wsrep::provider::status wsrep::wsrep_provider_v26::connect(

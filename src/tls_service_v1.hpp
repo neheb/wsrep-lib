@@ -33,7 +33,7 @@ namespace wsrep
     int tls_service_v1_probe(void *dlh);
 
     /**
-     * Initialize the thread service.
+     * Initialize TLS service.
      *
      * @param dlh Handle returned by dlopen().
      * @params thread_service Pointer to wsrep::thread_service implementation.
@@ -42,6 +42,13 @@ namespace wsrep
      */
     int tls_service_v1_init(void* dlh,
                             wsrep::tls_service* thread_service);
+
+    /**
+     * Deinitialize TLS service.
+     *
+     * @param dlh Handler returned by dlopen().
+     */
+    void tls_service_v1_deinit(void* dlh);
 }
 
 #endif // WSREP_TLS_SERVICE_V1_HPP

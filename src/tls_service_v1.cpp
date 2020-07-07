@@ -22,9 +22,7 @@
 #include "wsrep/tls_service.hpp"
 #include "wsrep/logger.hpp"
 #include "v26/wsrep_tls_service.h"
-
-#include <dlfcn.h>
-#include <cerrno>
+#include "service_helpers.hpp"
 
 namespace wsrep_tls_service_v1
 {
@@ -192,26 +190,9 @@ namespace wsrep_tls_service_v1
 
 int wsrep::tls_service_v1_probe(void* dlh)
 {
-   typedef int (*init_fn)(wsrep_tls_service_v1_t*);
-    union {
-        init_fn dlfun;
-        void* obj;
-    } alias;
-    // Clear previous errors
-    (void)dlerror();
-    alias.obj = dlsym(dlh, WSREP_TLS_SERVICE_INIT_FUNC_V1);
-    if (alias.obj)
-    {
-        wsrep::log_info()
-            << "Found support for TLS service v1 from provider";
-        return 0;
-    }
-    else
-    {
-        wsrep::log_info() << "TLS service v1 not found from provider: "
-                          << dlerror();
-        return ENOTSUP;
-    }
+    typedef int (*init_fn)(wsrep_tls_service_v1_t*);
+    return wsrep_impl::service_probe<init_fn>(
+        dlh, WSREP_TLS_SERVICE_INIT_FUNC_V1, "thread service v1");
 }
 
 int wsrep::tls_service_v1_init(void* dlh,
@@ -220,21 +201,21 @@ int wsrep::tls_service_v1_init(void* dlh,
     if (not (dlh && tls_service)) return EINVAL;
 
     typedef int (*init_fn)(wsrep_tls_service_v1_t*);
-    union {
-        init_fn dlfun;
-        void* obj;
-    } alias;
-    alias.obj = dlsym(dlh, WSREP_TLS_SERVICE_INIT_FUNC_V1);
-    if (alias.obj)
+    wsrep_tls_service_v1::tls_service_impl = tls_service;
+    int ret(0);
+    if ((ret = wsrep_impl::service_init<init_fn>(
+             dlh, WSREP_TLS_SERVICE_INIT_FUNC_V1,
+             &wsrep_tls_service_v1::tls_service_callbacks,
+             "tls service v1")))
     {
-        wsrep::log_info() << "Initializing TLS instrumentation";
-        wsrep_tls_service_v1::tls_service_impl = tls_service;
-        return (*alias.dlfun)(&wsrep_tls_service_v1::tls_service_callbacks);
+        wsrep_tls_service_v1::tls_service_impl = 0;
     }
-    else
-    {
-        wsrep::log_info()
-            << "Provider does not support TLS instrumentation";
-        return ENOTSUP;
-    }
+    return ret;
+}
+
+void wsrep::tls_service_v1_deinit(void* dlh)
+{
+    typedef int (*deinit_fn)();
+    wsrep_impl::service_deinit<deinit_fn>(
+        dlh, WSREP_TLS_SERVICE_DEINIT_FUNC_V1, "tls service v1");
 }
