@@ -184,8 +184,11 @@ namespace wsrep_tls_service_v1
 int wsrep::tls_service_v1_probe(void* dlh)
 {
     typedef int (*init_fn)(wsrep_tls_service_v1_t*);
+    typedef void (*deinit_fn)();
     return wsrep_impl::service_probe<init_fn>(
-        dlh, WSREP_TLS_SERVICE_INIT_FUNC_V1, "thread service v1");
+        dlh, WSREP_TLS_SERVICE_INIT_FUNC_V1, "tls service v1") ||
+        wsrep_impl::service_probe<deinit_fn>(
+            dlh, WSREP_TLS_SERVICE_DEINIT_FUNC_V1, "tls service v1");
 }
 
 int wsrep::tls_service_v1_init(void* dlh,
