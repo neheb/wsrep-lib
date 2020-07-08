@@ -67,8 +67,7 @@ namespace wsrep
         /**
          * @return Zero on success, system error code on failure.
          */
-        virtual tls_stream* create_tls_stream(tls_context*, int fd)
-            WSREP_NOEXCEPT = 0;
+        virtual tls_stream* create_tls_stream(int fd) WSREP_NOEXCEPT = 0;
         virtual void destroy(tls_stream*) WSREP_NOEXCEPT = 0;
 
         virtual int get_error_number(const tls_stream*) const WSREP_NOEXCEPT = 0;

@@ -28,25 +28,12 @@ namespace wsrep_tls_service_v1
 {
     static wsrep::tls_service* tls_service_impl{0};
 
-    static wsrep_tls_context_t* tls_context_create_cb()
-    {
-        assert(tls_service_impl);
-        return reinterpret_cast<wsrep_tls_context_t*>(0x1);
-    }
-
-    static void tls_context_free_cb(wsrep_tls_context_t*)
-    {
-        assert(tls_service_impl);
-    }
-
     static int tls_stream_init_cb(
-        wsrep_tls_context_t* context,
         wsrep_tls_stream_t* stream)
     {
         assert(tls_service_impl);
         stream->opaque =
-            tls_service_impl->create_tls_stream(
-                reinterpret_cast<wsrep::tls_context*>(context), stream->fd);
+            tls_service_impl->create_tls_stream(stream->fd);
         if (not stream->opaque)
         {
             return ENOMEM;
@@ -163,9 +150,6 @@ namespace wsrep_tls_service_v1
 
     static wsrep_tls_service_v1_t tls_service_callbacks =
     {
-        tls_context_create_cb,
-        tls_context_free_cb,
-        tls_error_message_get_cb,
         tls_stream_init_cb,
         tls_stream_deinit_cb,
         tls_stream_get_error_number_cb,
@@ -174,11 +158,9 @@ namespace wsrep_tls_service_v1
         tls_stream_server_handshake_cb,
         tls_stream_read_cb,
         tls_stream_write_cb,
-        tls_stream_shutdown_cb
-
+        tls_stream_shutdown_cb,
+        tls_error_message_get_cb
     };
-
-
 }
 
 int wsrep::tls_service_v1_probe(void* dlh)
