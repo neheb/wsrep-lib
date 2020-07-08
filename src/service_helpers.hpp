@@ -39,15 +39,14 @@ namespace wsrep_impl
         alias.obj = dlsym(dlh, symbol);
         if (alias.obj)
         {
-            wsrep::log_info()
-                << "Found support for " << service_name << " from provider";
             return 0;
         }
         else
         {
-            wsrep::log_info() << "Support for " << service_name
-                              << " not found from provider: "
-                              << dlerror();
+            wsrep::log_warning() << "Support for " << service_name
+                                 << " " << symbol
+                                 << " not found from provider: "
+                                 << dlerror();
             return ENOTSUP;
         }
     }
@@ -63,6 +62,8 @@ namespace wsrep_impl
             InitFn dlfun;
             void* obj;
         } alias;
+        // Clear previous errors
+        (void)dlerror();
         alias.obj = dlsym(dlh, symbol);
         if (alias.obj)
         {
@@ -84,6 +85,8 @@ namespace wsrep_impl
             DeinitFn dlfun;
             void* obj;
         } alias;
+        // Clear previous errors
+        (void)dlerror();
         alias.obj = dlsym(dlh, symbol);
         if (alias.obj)
         {
