@@ -28,6 +28,7 @@
 #include "wsrep/logger.hpp"
 
 #include <unistd.h> // read()
+#include <fcntl.h>
 #include <sys/types.h>
 #include <sys/socket.h> // send()
 #include <cerrno>
@@ -47,7 +48,11 @@ namespace
             , last_error_()
             , mode_(mode)
             , stats_()
-        { }
+            , is_blocking_()
+        {
+            int val(fcntl(fd_, F_GETFL, 0));
+            is_blocking_ = not (val & O_NONBLOCK);
+        }
         struct stats
         {
             size_t bytes_read{0};
@@ -78,12 +83,7 @@ namespace
 
         static char* get_error_message(int value, const void*)
         {
-            return ::strdup(::strerror(value));
-        }
-
-        static void free_error_message(char* msg)
-        {
-            ::free(msg);
+            return ::strerror(value);
         }
 
         enum wsrep::tls_service::status client_handshake();
@@ -104,34 +104,36 @@ namespace
         enum wsrep::tls_service::status handle_handshake_read(const char* expect);
         size_t determine_read_count(size_t max_count)
         {
-            if (mode_ < 2) return max_count;
+            if (is_blocking_ || mode_ < 2) return max_count;
             else if (::rand() % 100 == 0) return std::min(size_t(42), max_count);
             else return max_count;
         }
         size_t determine_write_count(size_t count)
         {
-            if (mode_ < 2) return count;
+            if (is_blocking_ || mode_ < 2) return count;
             else if (::rand() % 100 == 0) return std::min(size_t(43), count);
             else return count;
         }
 
         ssize_t do_read(void* buf, size_t max_count)
         {
-            if (mode_ < 3 ) return ::read(fd_, buf, max_count);
+            if (is_blocking_ || mode_ < 3 )
+                return ::read(fd_, buf, max_count);
             else if (::rand() % 1000 == 0) return EINTR;
             else return ::read(fd_, buf, max_count);
         }
 
         ssize_t do_write(const void* buf, size_t count)
         {
-            if (mode_ < 3) return ::send(fd_, buf, count, MSG_NOSIGNAL);
+            if (is_blocking_ || mode_ < 3)
+                return ::send(fd_, buf, count, MSG_NOSIGNAL);
             else if (::rand() % 1000 == 0) return EINTR;
             else return ::send(fd_, buf, count, MSG_NOSIGNAL);
         }
 
         wsrep::tls_service::op_result map_success(ssize_t result)
         {
-            if (mode_ < 2)
+            if (is_blocking_ || mode_ < 2)
             {
                 return wsrep::tls_service::op_result{
                     wsrep::tls_service::success, size_t(result)};
@@ -191,6 +193,7 @@ namespace
         // 2 - simulate errors and short reads
         int mode_;
         stats stats_;
+        bool is_blocking_;
     };
 
     enum wsrep::tls_service::status db_stream::client_handshake()
@@ -207,8 +210,10 @@ namespace
             state_ = s_client_handshake;
             wsrep::log_info() << this << " client handshake sent";
             stats_.bytes_written += 4;
+            if (not is_blocking_) return ret;
         }
-        else if (state_ == s_client_handshake)
+
+        if (state_ == s_client_handshake)
         {
             if ((ret = handle_handshake_read("serv")) ==
                 wsrep::tls_service::success)
@@ -216,13 +221,17 @@ namespace
                 state_ = s_want_write;
                 ret = wsrep::tls_service::want_write;
             }
+            if (not is_blocking_) return ret;
         }
-        else if (state_ == s_want_write)
+
+        if (state_ == s_want_write)
         {
             state_ = s_idle;
             ret = wsrep::tls_service::success;
+            if (not is_blocking_) return ret;
         }
-        else
+
+        if (not is_blocking_)
         {
             last_error_ = EPROTO;
             ret = wsrep::tls_service::error;
@@ -230,21 +239,25 @@ namespace
         return ret;
     }
 
+
+
     enum wsrep::tls_service::status db_stream::server_handshake()
     {
-        clear_error();
         enum wsrep::tls_service::status ret;
         assert(state_ == s_initialized ||
                state_ == s_server_handshake ||
                state_ == s_want_write);
+
         if (state_ == s_initialized)
         {
             ::send(fd_, "serv", 4, MSG_NOSIGNAL);
             ret = wsrep::tls_service::want_read;
             state_ = s_server_handshake;
             stats_.bytes_written += 4;
+            if (not is_blocking_) return ret;
         }
-        else if (state_ == s_server_handshake)
+
+        if (state_ == s_server_handshake)
         {
             if ((ret = handle_handshake_read("clie")) ==
                 wsrep::tls_service::success)
@@ -252,13 +265,17 @@ namespace
                 state_ = s_want_write;
                 ret = wsrep::tls_service::want_write;
             }
+            if (not is_blocking_) return ret;
         }
-        else if (state_ == s_want_write)
+
+        if (state_ == s_want_write)
         {
             state_ = s_idle;
             ret = wsrep::tls_service::success;
+            if (not is_blocking_) return ret;
         }
-        else
+
+        if (not is_blocking_)
         {
             last_error_ = EPROTO;
             ret = wsrep::tls_service::error;
@@ -348,16 +365,7 @@ static void merge_to_global_stats(const db_stream::stats& stats)
     global_stats.bytes_written += stats.bytes_written;
 }
 
-wsrep::tls_context* db::tls::create_tls_context() WSREP_NOEXCEPT
-{
-    return reinterpret_cast<wsrep::tls_context*>(1);
-}
-
-void db::tls::destroy(wsrep::tls_context*) WSREP_NOEXCEPT
-{ }
-
-wsrep::tls_stream* db::tls::create_tls_stream(
-    wsrep::tls_context*, int fd) WSREP_NOEXCEPT
+wsrep::tls_stream* db::tls::create_tls_stream(int fd) WSREP_NOEXCEPT
 {
     auto ret(new db_stream(fd, global_mode));
     wsrep::log_debug() << "New DB stream: " << ret;
@@ -386,15 +394,10 @@ const void* db::tls::get_error_category(const wsrep::tls_stream* stream)
     return static_cast<const db_stream*>(stream)->get_error_category();
 }
 
-char* db::tls::get_error_message(int value, const void* category)
+const char* db::tls::get_error_message(int value, const void* category)
     const WSREP_NOEXCEPT
 {
     return db_stream::get_error_message(value, category);
-}
-
-void db::tls::free_error_message(char* msg) const WSREP_NOEXCEPT
-{
-    return db_stream::free_error_message(msg);
 }
 
 enum wsrep::tls_service::status

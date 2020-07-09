@@ -29,18 +29,15 @@ namespace db
     class tls : public wsrep::tls_service
     {
     public:
-        virtual wsrep::tls_context* create_tls_context() WSREP_NOEXCEPT override;
-        virtual void destroy(wsrep::tls_context*) WSREP_NOEXCEPT override;
-        virtual wsrep::tls_stream* create_tls_stream(wsrep::tls_context*, int)
+        virtual wsrep::tls_stream* create_tls_stream(int)
             WSREP_NOEXCEPT override;
         virtual void destroy(wsrep::tls_stream*) WSREP_NOEXCEPT override;
         virtual int get_error_number(const wsrep::tls_stream*) const
             WSREP_NOEXCEPT override;
         virtual const void* get_error_category(const wsrep::tls_stream*) const
             WSREP_NOEXCEPT override;
-        virtual char* get_error_message(int, const void*) const
+        virtual const char* get_error_message(int, const void*) const
             WSREP_NOEXCEPT override;
-        virtual void free_error_message(char* ) const WSREP_NOEXCEPT override;
         virtual enum wsrep::tls_service::status
         client_handshake(wsrep::tls_stream*)
             WSREP_NOEXCEPT override;
