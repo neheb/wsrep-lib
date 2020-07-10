@@ -29,6 +29,7 @@ namespace wsrep_tls_service_v1
     static wsrep::tls_service* tls_service_impl{0};
 
     static int tls_stream_init_cb(
+        wsrep_tls_context_t*,
         wsrep_tls_stream_t* stream)
     {
         assert(tls_service_impl);
@@ -42,6 +43,7 @@ namespace wsrep_tls_service_v1
     }
 
     static void tls_stream_deinit_cb(
+        wsrep_tls_context_t*,
         wsrep_tls_stream_t* stream)
     {
         assert(tls_service_impl);
@@ -49,7 +51,9 @@ namespace wsrep_tls_service_v1
             reinterpret_cast<wsrep::tls_stream*>(stream->opaque));
     }
 
-    static int tls_stream_get_error_number_cb(const wsrep_tls_stream_t* stream)
+    static int tls_stream_get_error_number_cb(
+        wsrep_tls_context_t*,
+        const wsrep_tls_stream_t* stream)
     {
         assert(tls_service_impl);
         return tls_service_impl->get_error_number(
@@ -57,6 +61,7 @@ namespace wsrep_tls_service_v1
     }
 
     static const void* tls_stream_get_error_category_cb(
+        wsrep_tls_context_t*,
         const wsrep_tls_stream_t* stream)
     {
         assert(tls_service_impl);
@@ -65,6 +70,7 @@ namespace wsrep_tls_service_v1
     }
 
     static const char* tls_error_message_get_cb(
+        wsrep_tls_context_t*,
         int value, const void* category)
     {
         assert(tls_service_impl);
@@ -93,7 +99,9 @@ namespace wsrep_tls_service_v1
 
 
     static enum wsrep_tls_result
-    tls_stream_client_handshake_cb(wsrep_tls_stream_t* stream)
+    tls_stream_client_handshake_cb(
+        wsrep_tls_context_t*,
+        wsrep_tls_stream_t* stream)
     {
         assert(tls_service_impl);
         return map_return_value(
@@ -102,7 +110,9 @@ namespace wsrep_tls_service_v1
     }
 
     static enum wsrep_tls_result
-    tls_stream_server_handshake_cb(wsrep_tls_stream_t* stream)
+    tls_stream_server_handshake_cb(
+        wsrep_tls_context_t*,
+        wsrep_tls_stream_t* stream)
     {
         assert(tls_service_impl);
         return map_return_value(
@@ -111,6 +121,7 @@ namespace wsrep_tls_service_v1
     }
 
     static enum wsrep_tls_result tls_stream_read_cb(
+        wsrep_tls_context_t*,
         wsrep_tls_stream_t* stream,
         void* buf,
         size_t max_count,
@@ -125,6 +136,7 @@ namespace wsrep_tls_service_v1
     }
 
     static enum wsrep_tls_result tls_stream_write_cb(
+        wsrep_tls_context_t*,
         wsrep_tls_stream_t* stream,
         const void* buf,
         size_t count,
@@ -139,7 +151,8 @@ namespace wsrep_tls_service_v1
     }
 
     static enum wsrep_tls_result
-    tls_stream_shutdown_cb(wsrep_tls_stream_t* stream)
+    tls_stream_shutdown_cb(wsrep_tls_context_t*,
+                           wsrep_tls_stream_t* stream)
     {
         assert(tls_service_impl);
         // @todo Handle other values than success.
@@ -159,7 +172,8 @@ namespace wsrep_tls_service_v1
         tls_stream_read_cb,
         tls_stream_write_cb,
         tls_stream_shutdown_cb,
-        tls_error_message_get_cb
+        tls_error_message_get_cb,
+        0 // we pass NULL context for now.
     };
 }
 
