@@ -720,11 +720,6 @@ wsrep::wsrep_provider_v26::wsrep_provider_v26(
     }
 }
 
-extern "C" void cleanup_fn(void* app_ctx)
-{
-    reinterpret_cast<wsrep::wsrep_provider_v26*>(app_ctx)->deinit_services();
-}
-
 wsrep::wsrep_provider_v26::~wsrep_provider_v26()
 {
     wsrep_->free(wsrep_);
