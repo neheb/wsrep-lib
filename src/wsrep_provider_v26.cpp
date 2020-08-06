@@ -727,7 +727,9 @@ extern "C" void cleanup_fn(void* app_ctx)
 
 wsrep::wsrep_provider_v26::~wsrep_provider_v26()
 {
-    wsrep_cleanup_unload(wsrep_, cleanup_fn, this);
+    wsrep_->free(wsrep_);
+    deinit_services();
+    wsrep_unload(wsrep_);
 }
 
 enum wsrep::provider::status wsrep::wsrep_provider_v26::connect(

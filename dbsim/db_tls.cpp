@@ -202,7 +202,7 @@ namespace
         enum wsrep::tls_service::status ret;
         assert(state_ == s_initialized ||
                state_ == s_client_handshake ||
-               state_ = s_want_write);
+               state_ == s_want_write);
         if (state_ == s_initialized)
         {
             (void)::send(fd_, "clie", 4, MSG_NOSIGNAL);
