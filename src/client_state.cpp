@@ -135,6 +135,11 @@ int wsrep::client_state::before_command()
             // to the client, or after client_state become idle.
             // Clean up the transaction and return error.
             override_error(wsrep::e_deadlock_error);
+            if (keep_command_error_)
+            {
+                debug_log_state("before_command: keep error");
+                return 0;
+            }
             lock.unlock();
             (void)transaction_.after_statement();
             lock.lock();
@@ -158,7 +163,14 @@ void wsrep::client_state::after_command_before_result()
         override_error(wsrep::e_deadlock_error);
         lock.unlock();
         client_service_.bf_rollback();
-        (void)transaction_.after_statement();
+        // If keep current error is set, the result will be propagated
+        // back to client with some future command, so keep the transaction
+        // open here so that error handling can happen in before_command()
+        // hook.
+        if (not keep_command_error_)
+        {
+            (void)transaction_.after_statement();
+        }
         lock.lock();
         assert(transaction_.state() == wsrep::transaction::s_aborted);
         assert(current_error() != wsrep::e_success);
@@ -182,7 +194,7 @@ void wsrep::client_state::after_command_after_result()
         assert(transaction_.state() == wsrep::transaction::s_aborted);
         override_error(wsrep::e_deadlock_error);
     }
-    else if (transaction_.active() == false)
+    else if (transaction_.active() == false && not keep_command_error_)
     {
         current_error_ = wsrep::e_success;
         current_error_status_ = wsrep::provider::success;
